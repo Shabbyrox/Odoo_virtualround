@@ -1,140 +1,76 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/db";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Search, Plus, Filter, Download } from "lucide-react";
-import { redirect } from "next/navigation";
+import { Package, AlertTriangle, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
 
-export default async function ProductsPage({
-    searchParams,
-}: {
-    searchParams: Promise<{ q?: string }>;
-}) {
-    const params = await searchParams;
-    const query = params.q || "";
-
+export default async function ProductsPage() {
     const products = await db.product.findMany({
-        where: {
-            OR: [
-                { name: { contains: query, mode: "insensitive" } },
-                { sku: { contains: query, mode: "insensitive" } },
-            ],
+        orderBy: {
+            name: 'asc',
         },
         include: {
-            category: true,
-        },
-        orderBy: {
-            name: "asc",
-        },
+            category: true
+        }
     });
-
-    async function searchProducts(formData: FormData) {
-        "use server";
-        const query = formData.get("q")?.toString();
-        redirect(`/products?q=${query || ""}`);
-    }
 
     return (
         <div className="space-y-8 p-8 animate-fade-in">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900">Products</h1>
-                    <p className="text-slate-500 mt-1">
-                        Manage your product inventory and stock levels.
+                    <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+                        Products
+                    </h1>
+                    <p className="text-slate-500 mt-2 text-lg">
+                        Manage your product catalog and stock levels.
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" className="bg-white border-gray-200 text-slate-700 hover:bg-gray-50">
-                        <Download className="mr-2 h-4 w-4" /> Export
-                    </Button>
-                    <Button className="bg-slate-900 hover:bg-slate-800 text-white shadow-sm">
-                        <Plus className="mr-2 h-4 w-4" /> Add Product
-                    </Button>
-                </div>
+                <Link href="/products/create">
+                    <button className="bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors font-medium shadow-lg shadow-slate-900/20">
+                        Create Product
+                    </button>
+                </Link>
             </div>
 
-            <div className="light-card rounded-xl overflow-hidden">
-                <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row gap-4 items-center justify-between bg-white">
-                    <form action={searchProducts} className="relative flex-1 max-w-md w-full">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        <Input
-                            name="q"
-                            type="search"
-                            placeholder="Search by name or SKU..."
-                            className="pl-10 bg-white border-gray-200 focus:border-slate-900 focus:ring-slate-900"
-                            defaultValue={query}
-                        />
-                    </form>
-                    <Button variant="ghost" size="sm" className="text-slate-600 hover:text-slate-900 hover:bg-gray-100">
-                        <Filter className="mr-2 h-4 w-4" /> Filter
-                    </Button>
-                </div>
-
-                <div className="relative w-full overflow-auto bg-white">
-                    <Table>
-                        <TableHeader>
-                            <TableRow className="hover:bg-transparent border-gray-100">
-                                <TableHead className="w-[300px] text-slate-500 font-medium">Name</TableHead>
-                                <TableHead className="text-slate-500 font-medium">SKU</TableHead>
-                                <TableHead className="text-slate-500 font-medium">Category</TableHead>
-                                <TableHead className="text-slate-500 font-medium">Stock</TableHead>
-                                <TableHead className="text-right text-slate-500 font-medium">Status</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {products.length === 0 ? (
-                                <TableRow className="hover:bg-transparent border-gray-100">
-                                    <TableCell colSpan={5} className="text-center h-32 text-slate-500">
-                                        <div className="flex flex-col items-center gap-2">
-                                            <Search className="h-8 w-8 opacity-20" />
-                                            <p>No products found matching your search.</p>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {products.length === 0 ? (
+                    <div className="col-span-full text-center py-12 text-slate-500 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                        <Package className="w-12 h-12 mx-auto mb-4 text-slate-300" />
+                        <h3 className="text-lg font-medium text-slate-900">No products found</h3>
+                        <p className="mt-1">Create a new product to get started.</p>
+                    </div>
+                ) : (
+                    products.map((product) => (
+                        <Card key={product.id} className="light-card border-none hover:shadow-md transition-all duration-200 group">
+                            <CardContent className="p-6">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="p-3 rounded-xl bg-blue-50 text-blue-600 group-hover:bg-blue-100 transition-colors">
+                                        <Package size={24} />
+                                    </div>
+                                    {product.currentStock <= product.minStockThreshold && (
+                                        <div className="text-red-500" title="Low Stock">
+                                            <AlertTriangle size={20} />
                                         </div>
-                                    </TableCell>
-                                </TableRow>
-                            ) : (
-                                products.map((product) => {
-                                    const isLowStock = product.currentStock <= product.minStockThreshold;
-                                    return (
-                                        <TableRow key={product.id} className="hover:bg-gray-50 border-gray-100 transition-colors group">
-                                            <TableCell className="font-medium text-slate-900">
-                                                {product.name}
-                                            </TableCell>
-                                            <TableCell className="font-mono text-xs text-slate-500">{product.sku}</TableCell>
-                                            <TableCell>
-                                                <Badge variant="outline" className="bg-gray-50 border-gray-200 text-slate-600 font-normal">
-                                                    {product.category.name}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>
-                                                <span className="font-medium text-slate-900">{product.currentStock}</span>
-                                                <span className="text-slate-500 text-xs ml-1">{product.unitOfMeasure}</span>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {isLowStock ? (
-                                                    <Badge variant="destructive" className="bg-red-50 text-red-600 hover:bg-red-100 border-red-100">
-                                                        Low Stock
-                                                    </Badge>
-                                                ) : (
-                                                    <Badge variant="secondary" className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100">
-                                                        In Stock
-                                                    </Badge>
-                                                )}
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
+                                    )}
+                                </div>
+                                <h3 className="font-bold text-slate-900 text-lg mb-1">{product.name}</h3>
+                                <p className="text-sm text-slate-500 mb-4">{product.sku}</p>
+
+                                <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                                    <div>
+                                        <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">Stock</p>
+                                        <p className={`font-bold text-lg ${product.currentStock <= product.minStockThreshold ? 'text-red-600' : 'text-slate-900'}`}>
+                                            {product.currentStock} <span className="text-xs font-normal text-slate-500">{product.unitOfMeasure}</span>
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-xs text-slate-400 uppercase tracking-wider font-medium">Category</p>
+                                        <p className="text-sm font-medium text-slate-700">{product.category.name}</p>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))
+                )}
             </div>
         </div>
     );

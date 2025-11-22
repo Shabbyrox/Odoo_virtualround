@@ -32,6 +32,12 @@ export default async function Dashboard() {
     }
   });
 
+  const recentMoves = await db.stockMove.findMany({
+    take: 5,
+    orderBy: { createdAt: 'desc' },
+    include: { product: true }
+  });
+
   const kpiData = [
     {
       title: "Total Products",
@@ -99,7 +105,7 @@ export default async function Dashboard() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        {kpiData.map((kpi, index) => (
+        {kpiData.map((kpi) => (
           <Card
             key={kpi.title}
             className="light-card border-none hover:shadow-md transition-all duration-300 group"
@@ -129,15 +135,33 @@ export default async function Dashboard() {
         ))}
       </div>
 
-      {/* Placeholder for Chart or Recent Activity */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4 light-card border-none">
           <CardHeader>
             <CardTitle className="text-slate-900">Recent Activity</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[200px] flex items-center justify-center text-slate-400 border border-dashed border-gray-200 rounded-lg bg-gray-50">
-              Activity Chart Placeholder
+            <div className="space-y-4">
+              {recentMoves.length === 0 ? (
+                <div className="text-center text-slate-500 py-8">No recent activity</div>
+              ) : (
+                recentMoves.map((move) => (
+                  <div key={move.id} className="flex items-center justify-between border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                    <div className="flex flex-col">
+                      <span className="font-medium text-slate-900">{move.product.name}</span>
+                      <span className="text-xs text-slate-500">
+                        {move.type.replace(/_/g, " ")} • {new Date(move.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className={`text-sm font-bold ${move.type === "INCOMING_RECEIPT" ? "text-emerald-600" :
+                        move.type === "OUTGOING_DELIVERY" ? "text-red-600" : "text-slate-600"
+                      }`}>
+                      {move.type === "INCOMING_RECEIPT" ? "+" : move.type === "OUTGOING_DELIVERY" ? "-" : ""}
+                      {move.quantity}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
