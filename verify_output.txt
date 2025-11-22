@@ -1,0 +1,69 @@
+Starting verification...
+prisma:error 
+Invalid `db.product.create()` invocation in
+C:\Odoo Virtual\verify_logic.ts:9:38
+
+  6 console.log("Starting verification...")
+  7 
+  8 // 1. Create a Product
+→ 9 const product = await db.product.create({
+      data: {
+        name: "Test Product 1763795497209",
+        sku: "TEST-1763795497209",
+        categoryId: "default",
+        ~~~~~~~~~~
+        unitOfMeasure: "Units",
+        initialStock: 0,
+        currentStock: 0,
+        minStockThreshold: 10,
+        category: {
+          create: {
+            name: "Test Category 1763795497209"
+          }
+        },
+    ?   id?: String,
+    ?   createdAt?: DateTime,
+    ?   updatedAt?: DateTime,
+    ?   stockMoves?: StockMoveCreateNestedManyWithoutProductInput
+      }
+    })
+
+Unknown argument `categoryId`. Did you mean `category`? Available options are marked with ?.
+PrismaClientValidationError: 
+Invalid `db.product.create()` invocation in
+C:\Odoo Virtual\verify_logic.ts:9:38
+
+  6 console.log("Starting verification...")
+  7 
+  8 // 1. Create a Product
+→ 9 const product = await db.product.create({
+      data: {
+        name: "Test Product 1763795497209",
+        sku: "TEST-1763795497209",
+        categoryId: "default",
+        ~~~~~~~~~~
+        unitOfMeasure: "Units",
+        initialStock: 0,
+        currentStock: 0,
+        minStockThreshold: 10,
+        category: {
+          create: {
+            name: "Test Category 1763795497209"
+          }
+        },
+    ?   id?: String,
+    ?   createdAt?: DateTime,
+    ?   updatedAt?: DateTime,
+    ?   stockMoves?: StockMoveCreateNestedManyWithoutProductInput
+      }
+    })
+
+Unknown argument `categoryId`. Did you mean `category`? Available options are marked with ?.
+    at Tn (C:\Odoo Virtual\node_modules\@prisma\client\runtime\library.js:116:5888)
+    at In.handleRequestError (C:\Odoo Virtual\node_modules\@prisma\client\runtime\library.js:123:6510)
+    at In.handleAndLogRequestError (C:\Odoo Virtual\node_modules\@prisma\client\runtime\library.js:123:6188)
+    at In.request (C:\Odoo Virtual\node_modules\@prisma\client\runtime\library.js:123:5896)
+    at async l (C:\Odoo Virtual\node_modules\@prisma\client\runtime\library.js:128:10871)
+    at async main (C:\Odoo Virtual\verify_logic.ts:9:21) {
+  clientVersion: '5.10.0'
+}

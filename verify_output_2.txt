@@ -1,0 +1,9 @@
+Starting verification...
+Created Product: aecded58-456a-45fd-b5a1-b9fb7a143cc4 Test Product 1763795558293
+Created Receipt: cb89cb86-a9dc-4a47-bcac-aaff56e75f7a
+Validated Receipt
+Stock after receipt: 100
+Created Delivery: fce4b2f2-7d59-4602-b436-d40c487cf91e
+Validated Delivery
+Stock after delivery: 70
+Verification Successful!
