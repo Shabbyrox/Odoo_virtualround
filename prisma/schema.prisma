@@ -1,0 +1,104 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MANAGER
+  WAREHOUSE_STAFF
+}
+
+enum StockMoveType {
+  INCOMING_RECEIPT
+  OUTGOING_DELIVERY
+  INTERNAL_TRANSFER
+  ADJUSTMENT
+}
+
+enum StockMoveStatus {
+  DRAFT
+  VALIDATED
+  CANCELED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      Role     @default(WAREHOUSE_STAFF)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Warehouse {
+  id        String     @id @default(uuid())
+  name      String
+  location  String
+  locations Location[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Location {
+  id          String      @id @default(uuid())
+  name        String
+  warehouseId String
+  warehouse   Warehouse   @relation(fields: [warehouseId], references: [id])
+  stockMovesFrom StockMove[] @relation("SourceLocation")
+  stockMovesTo   StockMove[] @relation("DestinationLocation")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Product {
+  id                String      @id @default(uuid())
+  name              String
+  sku               String      @unique
+  categoryId        String
+  category          Category    @relation(fields: [categoryId], references: [id])
+  unitOfMeasure     String
+  initialStock      Int         @default(0)
+  currentStock      Int         @default(0)
+  minStockThreshold Int         @default(0)
+  stockMoves        StockMove[]
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+model StockMove {
+  id                    String          @id @default(uuid())
+  type                  StockMoveType
+  productId             String
+  product               Product         @relation(fields: [productId], references: [id])
+  sourceLocationId      String?
+  sourceLocation        Location?       @relation("SourceLocation", fields: [sourceLocationId], references: [id])
+  destinationLocationId String?
+  destinationLocation   Location?       @relation("DestinationLocation", fields: [destinationLocationId], references: [id])
+  quantity              Int
+  status                StockMoveStatus @default(DRAFT)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  email     String
+  token     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}

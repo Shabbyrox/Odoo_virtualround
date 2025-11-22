@@ -1,0 +1,10 @@
+# Database
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/stockmaster"
+
+# NextAuth
+NEXTAUTH_SECRET="supersecret"
+NEXTAUTH_URL="http://localhost:3000"
+
+# Gmail SMTP
+GMAIL_USER="shubhamdebnath214@gmail.com"
+GMAIL_APP_PASSWORD="ddzg lavi czhi ihit"
