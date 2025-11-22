@@ -4,11 +4,11 @@
 
 ## 🎯 Problem Statement
 
-[cite_start]The goal of the StockMaster project is to digitize and streamline all stock-related operations for a business, replacing inefficient manual processes like handwritten registers, scattered Excel sheets, and non-centralized tracking methods[cite: 5].
+The goal of the StockMaster project is to digitize and streamline all stock-related operations for a business, replacing inefficient manual processes like handwritten registers, scattered Excel sheets, and non-centralized tracking methods.
 
 The current system lacks real-time visibility, leading to stock mismatches and operational bottlenecks. StockMaster provides a **centralized, real-time, easy-to-use application** aimed at two key user groups:
-* [cite_start]**Inventory Managers:** To efficiently manage incoming and outgoing stock[cite: 9].
-* [cite_start]**Warehouse Staff:** To accurately perform physical transfers, picking, shelving, and counting[cite: 10].
+* **Inventory Managers:** To efficiently manage incoming and outgoing stock.
+* **Warehouse Staff:** To accurately perform physical transfers, picking, shelving, and counting.
 
 ---
 
@@ -21,9 +21,9 @@ StockMaster is built as a full-stack, modular application designed around a robu
 The frontend focuses on a professional, intuitive user experience to maximize efficiency for warehouse and management staff.
 
 * **Technology:** Developed using **React** with **Ant Design (antd)** for a modern, component-based UI.
-* [cite_start]**Navigation:** A fixed, collapsible **Left Sidebar** provides immediate access to all core modules: **Dashboard**, **Products**, **Operations**, **Move History**, **Setting**, and **Profile Menu**[cite: 27].
-* [cite_start]**Dashboard:** The landing page provides a real-time snapshot of the warehouse's health through key performance indicators (KPIs) like **Low Stock/Out of Stock Items**, **Pending Receipts**, and **Pending Deliveries**[cite: 16, 17].
-* [cite_start]**Guided Forms:** Core operations (Receipts, Deliveries, Adjustments) use intuitive, multi-step forms to minimize data entry errors by warehouse staff[cite: 55, 64].
+* **Navigation:** A fixed, collapsible **Left Sidebar** provides immediate access to all core modules: **Dashboard**, **Products**, **Operations**, **Move History**, **Setting**, and **Profile Menu**.
+* **Dashboard:** The landing page provides a real-time snapshot of the warehouse's health through key performance indicators (KPIs) like **Low Stock/Out of Stock Items**, **Pending Receipts**, and **Pending Deliveries**
+* **Guided Forms:** Core operations (Receipts, Deliveries, Adjustments) use intuitive, multi-step forms to minimize data entry errors by warehouse staff.
 
 ---
 
@@ -32,14 +32,14 @@ The frontend focuses on a professional, intuitive user experience to maximize ef
 The backend is built around a secure API and a highly reliable database schema to handle all transactional data.
 
 * **Database:** **PostgreSQL** is used as the transactional database for its reliability and integrity.
-* [cite_start]**Product Management:** Implements full **CRUD** (Create, Read, Update, Delete) for products and manages supporting entities like **Product Categories** and **Reordering Rules**[cite: 30, 32, 33].
-* **Core Ledger:** The system utilizes a central **Move History Ledger** to log *every* single stock transaction. [cite_start]This ensures **stock availability per location** is calculated in real-time by summing and subtracting transactional entries, providing unparalleled accuracy[cite: 31, 76, 103].
+* **Product Management:** Implements full **CRUD** (Create, Read, Update, Delete) for products and manages supporting entities like **Product Categories** and **Reordering Rules**.
+* **Core Ledger:** The system utilizes a central **Move History Ledger** to log *every* single stock transaction. This ensures **stock availability per location** is calculated in real-time by summing and subtracting transactional entries, providing unparalleled accuracy.
 * **Operational Logic:**
-    * [cite_start]**Receipts (Incoming Stock):** Upon validation, stock automatically increases[cite: 59].
-    * [cite_start]**Delivery Orders (Outgoing Stock):** Upon validation, stock automatically decreases[cite: 67].
-    * [cite_start]**Internal Transfers:** Stock is moved between defined locations (e.g., Rack A $\rightarrow$ Rack B) and logged without affecting the overall total stock[cite: 71, 76, 95].
-    * [cite_start]**Stock Adjustments:** Enables fixing mismatches between recorded and physical counts, with the system auto-updating and logging the change[cite: 77, 84].
-* [cite_start]**Alerts:** Systematically checks the ledger against defined **Reordering Rules** to trigger **low stock alerts**[cite: 33, 86].
+    * **Receipts (Incoming Stock):** Upon validation, stock automatically increases.
+    * **Delivery Orders (Outgoing Stock):** Upon validation, stock automatically decreases.
+    * **Internal Transfers:** Stock is moved between defined locations (e.g., Rack A $\rightarrow$ Rack B) and logged without affecting the overall total stock.
+    * **Stock Adjustments:** Enables fixing mismatches between recorded and physical counts, with the system auto-updating and logging the change.
+* **Alerts:** Systematically checks the ledger against defined **Reordering Rules** to trigger **low stock alerts**.
 
 **Use your preferred IDE**
 
@@ -83,5 +83,4 @@ This project is built with:
 - Vite
 - TypeScript
 - React
-- shadcn-ui
 - Tailwind CSS
