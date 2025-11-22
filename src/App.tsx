@@ -7,6 +7,9 @@ import { ConfigProvider } from "antd";
 import AppLayout from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import Products from "./pages/Products";
+import Categories from "./pages/Categories";
+import MoveHistory from "./pages/MoveHistory";
+import Settings from "./pages/Settings";
 import Receipts from "./pages/Receipts";
 import Deliveries from "./pages/Deliveries";
 import Adjustments from "./pages/Adjustments";
@@ -31,9 +34,12 @@ const App = () => (
           <Routes>
             <Route path="/" element={<AppLayout><Dashboard /></AppLayout>} />
             <Route path="/products" element={<AppLayout><Products /></AppLayout>} />
+            <Route path="/categories" element={<AppLayout><Categories /></AppLayout>} />
             <Route path="/receipts" element={<AppLayout><Receipts /></AppLayout>} />
             <Route path="/deliveries" element={<AppLayout><Deliveries /></AppLayout>} />
             <Route path="/adjustments" element={<AppLayout><Adjustments /></AppLayout>} />
+            <Route path="/move-history" element={<AppLayout><MoveHistory /></AppLayout>} />
+            <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
