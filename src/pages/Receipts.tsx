@@ -1,26 +1,128 @@
 import { useState } from "react";
-import { Card, Form, Input, Select, DatePicker, Button, Table, Space, InputNumber, Divider } from "antd";
-import { PlusOutlined, DeleteOutlined, SaveOutlined, CheckOutlined } from "@ant-design/icons";
+import { Card, Form, Input, Select, DatePicker, Button, Table, Space, InputNumber, message } from "antd";
+import { PlusOutlined, DeleteOutlined, CheckOutlined } from "@ant-design/icons";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import dayjs from "dayjs";
 
 const { Option } = Select;
 
 interface ProductLine {
   key: string;
   productId: string;
-  productName: string;
   quantity: number;
 }
 
 export default function Receipts() {
   const [form] = Form.useForm();
   const [productLines, setProductLines] = useState<ProductLine[]>([]);
+  const queryClient = useQueryClient();
+
+  // Fetch Suppliers
+  const { data: suppliers = [] } = useQuery({
+    queryKey: ["suppliers"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("suppliers").select("id, name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch Locations
+  const { data: locations = [] } = useQuery({
+    queryKey: ["locations"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("locations").select("id, name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch Products
+  const { data: products = [] } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("products").select("id, name, sku");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const createReceiptMutation = useMutation({
+    mutationFn: async (values: any) => {
+      // 1. Create Receipt
+      const { data: receipt, error: receiptError } = await supabase
+        .from("receipts")
+        .insert({
+          supplier_id: values.supplier,
+          location_id: values.location,
+          date: values.date.toISOString(),
+          reference: values.reference,
+          status: "completed",
+        })
+        .select()
+        .single();
+
+      if (receiptError) throw receiptError;
+
+      // 2. Create Receipt Items & Update Inventory & Log Movements
+      for (const line of productLines) {
+        // Add Item
+        const { error: itemError } = await supabase.from("receipt_items").insert({
+          receipt_id: receipt.id,
+          product_id: line.productId,
+          quantity: line.quantity,
+        });
+        if (itemError) throw itemError;
+
+        // Log Movement
+        const { error: moveError } = await supabase.from("movements").insert({
+          product_id: line.productId,
+          type: "Receipt",
+          to_location_id: values.location,
+          quantity: line.quantity,
+          reason: `Receipt #${receipt.id.slice(0, 8)}`,
+          status: "completed",
+        });
+        if (moveError) throw moveError;
+
+        // Update Inventory (Get current first)
+        const { data: currentInv } = await supabase
+          .from("inventory")
+          .select("quantity")
+          .eq("product_id", line.productId)
+          .eq("location_id", values.location)
+          .maybeSingle();
+
+        const newQty = (currentInv?.quantity || 0) + line.quantity;
+
+        const { error: invError } = await supabase
+          .from("inventory")
+          .upsert({
+            product_id: line.productId,
+            location_id: values.location,
+            quantity: newQty,
+          }, { onConflict: 'product_id,location_id' });
+
+        if (invError) throw invError;
+      }
+    },
+    onSuccess: () => {
+      message.success("Receipt validated and inventory updated");
+      form.resetFields();
+      setProductLines([]);
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (error) => {
+      message.error(`Error creating receipt: ${error.message}`);
+    },
+  });
 
   const addProductLine = () => {
     const newLine: ProductLine = {
       key: Date.now().toString(),
       productId: "",
-      productName: "",
-      quantity: 0,
+      quantity: 1,
     };
     setProductLines([...productLines, newLine]);
   };
@@ -47,12 +149,14 @@ export default function Receipts() {
         <Select
           placeholder="Select product"
           style={{ width: "100%" }}
-          value={record.productId}
+          value={record.productId || undefined}
           onChange={(value) => handleProductChange(record.key, "productId", value)}
+          showSearch
+          optionFilterProp="children"
         >
-          <Option value="PROD-001">PROD-001 - Wireless Mouse</Option>
-          <Option value="PROD-002">PROD-002 - Office Chair</Option>
-          <Option value="PROD-003">PROD-003 - Notebook A4</Option>
+          {products.map((p: any) => (
+            <Option key={p.id} value={p.id}>{p.sku} - {p.name}</Option>
+          ))}
         </Select>
       ),
     },
@@ -87,13 +191,17 @@ export default function Receipts() {
     },
   ];
 
-  const handleSaveDraft = () => {
-    console.log("Saving as draft...");
-  };
-
   const handleValidate = () => {
     form.validateFields().then((values) => {
-      console.log("Receipt validated:", { ...values, products: productLines });
+      if (productLines.length === 0) {
+        message.error("Please add at least one product");
+        return;
+      }
+      if (productLines.some(l => !l.productId || l.quantity <= 0)) {
+        message.error("Please complete all product lines");
+        return;
+      }
+      createReceiptMutation.mutate(values);
     });
   };
 
@@ -122,9 +230,9 @@ export default function Receipts() {
               rules={[{ required: true, message: "Please select supplier" }]}
             >
               <Select placeholder="Select supplier">
-                <Option value="supplier-1">TechPro Distributors</Option>
-                <Option value="supplier-2">Office Furniture Inc.</Option>
-                <Option value="supplier-3">Stationery Wholesale Co.</Option>
+                {suppliers.map((s: any) => (
+                  <Option key={s.id} value={s.id}>{s.name}</Option>
+                ))}
               </Select>
             </Form.Item>
             <Form.Item
@@ -133,9 +241,9 @@ export default function Receipts() {
               rules={[{ required: true, message: "Please select location" }]}
             >
               <Select placeholder="Select location">
-                <Option value="main-a1">Main Warehouse - A1</Option>
-                <Option value="main-b2">Main Warehouse - B2</Option>
-                <Option value="dc-a-d1">Distribution Center A - D1</Option>
+                {locations.map((l: any) => (
+                  <Option key={l.id} value={l.id}>{l.name}</Option>
+                ))}
               </Select>
             </Form.Item>
           </div>
@@ -165,18 +273,11 @@ export default function Receipts() {
       <Card className="shadow-kpi">
         <Space size="middle">
           <Button
-            type="default"
-            icon={<SaveOutlined />}
-            size="large"
-            onClick={handleSaveDraft}
-          >
-            Save as Draft
-          </Button>
-          <Button
             type="primary"
             icon={<CheckOutlined />}
             size="large"
             onClick={handleValidate}
+            loading={createReceiptMutation.isPending}
           >
             Validate Receipt
           </Button>

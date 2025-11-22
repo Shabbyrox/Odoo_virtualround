@@ -1,98 +1,214 @@
 import { useState } from "react";
-import { Table, Button, Space, Tag, Modal, Form, Input, Select, InputNumber, Card } from "antd";
+import { Table, Button, Space, Tag, Modal, Form, Input, Select, InputNumber, Card, message } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const { Option } = Select;
 
 interface ProductType {
-  key: string;
+  id: string;
   sku: string;
   name: string;
-  category: string;
+  category: { name: string } | null;
   unit: string;
-  totalStock: number;
-  locations: { location: string; quantity: number }[];
+  min_stock_level: number;
+  inventory: { quantity: number; location: { name: string } | null }[];
 }
-
-// Mock product data
-const mockProducts: ProductType[] = [
-  {
-    key: "1",
-    sku: "PROD-001",
-    name: "Wireless Mouse",
-    category: "Electronics",
-    unit: "Unit",
-    totalStock: 150,
-    locations: [
-      { location: "Main Warehouse - A1", quantity: 100 },
-      { location: "Main Warehouse - B2", quantity: 50 },
-    ],
-  },
-  {
-    key: "2",
-    sku: "PROD-002",
-    name: "Office Chair",
-    category: "Furniture",
-    unit: "Unit",
-    totalStock: 45,
-    locations: [
-      { location: "Main Warehouse - C3", quantity: 30 },
-      { location: "Distribution Center A - D1", quantity: 15 },
-    ],
-  },
-  {
-    key: "3",
-    sku: "PROD-003",
-    name: "Notebook A4",
-    category: "Office Supplies",
-    unit: "Pack",
-    totalStock: 500,
-    locations: [
-      { location: "Main Warehouse - E5", quantity: 300 },
-      { location: "Distribution Center B - F2", quantity: 200 },
-    ],
-  },
-];
 
 export default function Products() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
+  const [editingProduct, setEditingProduct] = useState<ProductType | null>(null);
   const [form] = Form.useForm();
+  const queryClient = useQueryClient();
+
+  // Fetch Products
+  const { data: products = [], isLoading } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select(`
+          *,
+          category:categories(name, id),
+          inventory(quantity, location:locations(name))
+        `)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data as unknown as ProductType[];
+    },
+  });
+
+  // Fetch Categories
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("categories")
+        .select("*")
+        .eq("status", "active");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch Locations (for initial stock assignment)
+  const { data: locations = [] } = useQuery({
+    queryKey: ["locations"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("locations").select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Update Product Mutation
+  const updateProductMutation = useMutation({
+    mutationFn: async (values: any) => {
+      if (!editingProduct) return;
+
+      const { error } = await supabase
+        .from("products")
+        .update({
+          name: values.name,
+          sku: values.sku,
+          category_id: values.category_id,
+          unit: values.unit,
+          min_stock_level: values.min_stock_level,
+        } as unknown as never)
+        .eq("id", editingProduct.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      message.success("Product updated successfully");
+      setIsModalOpen(false);
+      setEditingProduct(null);
+      form.resetFields();
+    },
+    onError: (error) => {
+      message.error(`Error updating product: ${error.message}`);
+    },
+  });
+
+  // Create Product Mutation
+  const createProductMutation = useMutation({
+    mutationFn: async (values: any) => {
+      // 1. Create Product
+      const { data: product, error: productError } = await supabase
+        .from("products")
+        .insert({
+          name: values.name,
+          sku: values.sku,
+          category_id: values.category_id,
+          unit: values.unit,
+          min_stock_level: values.min_stock_level || 0,
+        } as unknown as never)
+        .select()
+        .single();
+
+      if (productError) throw productError;
+
+      // 2. Add Initial Stock (if any)
+      // Note: locations is fetched via useQuery, so it should be available in the closure.
+      // If it's not, we might need to refetch or pass it.
+      // Assuming locations is available from the component scope.
+      if (values.initial_stock > 0 && locations.length > 0) {
+        // Default to first location for now
+        const defaultLocation = locations[0];
+        const { error: inventoryError } = await supabase
+          .from("inventory")
+          .insert({
+            product_id: (product as any).id,
+            location_id: defaultLocation.id,
+            quantity: values.initial_stock,
+          } as unknown as never);
+
+        if (inventoryError) throw inventoryError;
+
+        // Log movement
+        await supabase.from("movements").insert({
+          product_id: (product as any).id,
+          type: "Receipt",
+          to_location_id: defaultLocation.id,
+          quantity: values.initial_stock,
+          reason: "Initial Stock",
+          status: "completed"
+        } as unknown as never);
+      }
+
+      return product;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      message.success("Product created successfully");
+      setIsModalOpen(false);
+      form.resetFields();
+    },
+    onError: (error) => {
+      message.error(`Error creating product: ${error.message}`);
+    },
+  });
+
+  // Delete Product Mutation
+  const deleteProductMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("products").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      message.success("Product deleted successfully");
+    },
+    onError: (error) => {
+      message.error(`Error deleting product: ${error.message}`);
+    },
+  });
+
+  const locationColumns = [
+    {
+      title: "Location",
+      dataIndex: ["location", "name"],
+      key: "location",
+      render: (text: string) => text || "Unknown Location",
+    },
+    {
+      title: "Quantity",
+      dataIndex: "quantity",
+      key: "quantity",
+      render: (qty: number) => <span className="font-semibold">{qty}</span>,
+    },
+  ];
 
   const columns: ColumnsType<ProductType> = [
-    {
-      title: "SKU",
-      dataIndex: "sku",
-      key: "sku",
-      render: (text) => <span className="font-mono font-medium">{text}</span>,
-    },
     {
       title: "Product Name",
       dataIndex: "name",
       key: "name",
+      render: (text) => <span className="font-medium">{text}</span>,
     },
     {
-      title: "Category",
-      dataIndex: "category",
-      key: "category",
-      render: (category) => <Tag color="blue">{category}</Tag>,
+      title: "ID",
+      dataIndex: "id",
+      key: "id",
+      render: (text) => <span className="text-xs text-gray-500" title={text}>{text.slice(0, 8)}...</span>,
     },
     {
-      title: "Unit",
-      dataIndex: "unit",
-      key: "unit",
-    },
-    {
-      title: "Total Stock",
-      dataIndex: "totalStock",
-      key: "totalStock",
-      render: (stock) => (
-        <span className={stock < 50 ? "text-warning font-semibold" : "font-semibold"}>
-          {stock}
-        </span>
-      ),
+      title: "Quantity",
+      key: "quantity",
+      render: (_, record) => {
+        const totalStock = record.inventory?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+        return (
+          <Tag color={totalStock <= record.min_stock_level ? "red" : "green"}>
+            {totalStock} {record.unit}
+          </Tag>
+        );
+      },
     },
     {
       title: "Actions",
@@ -112,14 +228,22 @@ export default function Products() {
           <Button
             type="link"
             icon={<EditOutlined />}
-            onClick={() => {
-              form.setFieldsValue(record);
-              setIsModalOpen(true);
-            }}
+            onClick={() => handleEditProduct(record)}
           >
             Edit
           </Button>
-          <Button type="link" danger icon={<DeleteOutlined />}>
+          <Button
+            type="link"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => {
+              Modal.confirm({
+                title: "Delete Product",
+                content: "Are you sure you want to delete this product?",
+                onOk: () => deleteProductMutation.mutate(record.id),
+              });
+            }}
+          >
             Delete
           </Button>
         </Space>
@@ -127,30 +251,37 @@ export default function Products() {
     },
   ];
 
-  const locationColumns = [
-    {
-      title: "Location",
-      dataIndex: "location",
-      key: "location",
-    },
-    {
-      title: "Quantity",
-      dataIndex: "quantity",
-      key: "quantity",
-      render: (qty: number) => <span className="font-semibold">{qty}</span>,
-    },
-  ];
+  // ... (keep locationColumns)
 
   const handleCreateProduct = () => {
+    setEditingProduct(null);
     form.resetFields();
+    setIsModalOpen(true);
+  };
+
+  const handleEditProduct = (product: ProductType) => {
+    setEditingProduct(product);
+    form.setFieldsValue({
+      name: product.name,
+      sku: product.sku,
+      category_id: (product.category as any)?.id, // Note: category object structure might need adjustment based on query
+      unit: product.unit,
+      min_stock_level: product.min_stock_level,
+    });
+    // We need to fetch the category_id correctly. The current query returns category: { name }. 
+    // We might need to adjust the query or find the category ID from the list if not present.
+    // Actually, the query is: category:categories(name). It doesn't return ID.
+    // Let's update the query to return ID as well.
     setIsModalOpen(true);
   };
 
   const handleModalOk = () => {
     form.validateFields().then((values) => {
-      console.log("Product values:", values);
-      setIsModalOpen(false);
-      form.resetFields();
+      if (editingProduct) {
+        updateProductMutation.mutate(values);
+      } else {
+        createProductMutation.mutate(values);
+      }
     });
   };
 
@@ -160,9 +291,6 @@ export default function Products() {
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-semibold text-foreground">Product Management</h2>
           <Space>
-            <Button onClick={() => console.log("Manage categories")}>
-              Manage Categories
-            </Button>
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -177,7 +305,9 @@ export default function Products() {
       <Card className="shadow-kpi">
         <Table
           columns={columns}
-          dataSource={mockProducts}
+          dataSource={products}
+          rowKey="id"
+          loading={isLoading}
           pagination={{ pageSize: 10 }}
           scroll={{ x: 1000 }}
         />
@@ -185,11 +315,16 @@ export default function Products() {
 
       {/* Create/Edit Product Modal */}
       <Modal
-        title="Product Details"
+        title={editingProduct ? "Edit Product" : "Add New Product"}
         open={isModalOpen}
         onOk={handleModalOk}
-        onCancel={() => setIsModalOpen(false)}
+        onCancel={() => {
+          setIsModalOpen(false);
+          setEditingProduct(null);
+          form.resetFields();
+        }}
         width={600}
+        confirmLoading={createProductMutation.isPending || updateProductMutation.isPending}
       >
         <Form form={form} layout="vertical" className="mt-4">
           <Form.Item
@@ -208,13 +343,15 @@ export default function Products() {
           </Form.Item>
           <Form.Item
             label="Category"
-            name="category"
+            name="category_id"
             rules={[{ required: true, message: "Please select category" }]}
           >
             <Select placeholder="Select category">
-              <Option value="Electronics">Electronics</Option>
-              <Option value="Furniture">Furniture</Option>
-              <Option value="Office Supplies">Office Supplies</Option>
+              {categories.map((cat: any) => (
+                <Option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </Option>
+              ))}
             </Select>
           </Form.Item>
           <Form.Item
@@ -229,14 +366,30 @@ export default function Products() {
               <Option value="Kg">Kilogram</Option>
             </Select>
           </Form.Item>
+
+          {!editingProduct && (
+            <Form.Item
+              label="Initial Stock"
+              name="initial_stock"
+              initialValue={0}
+              help="Initial stock can only be set when creating a product. Use Adjustments to change stock later."
+            >
+              <InputNumber
+                min={0}
+                placeholder="Enter quantity"
+                style={{ width: "100%" }}
+              />
+            </Form.Item>
+          )}
+
           <Form.Item
-            label="Initial Stock"
-            name="totalStock"
-            rules={[{ required: true, message: "Please enter initial stock" }]}
+            label="Min Stock Level"
+            name="min_stock_level"
+            initialValue={0}
           >
             <InputNumber
               min={0}
-              placeholder="Enter quantity"
+              placeholder="Enter minimum stock alert level"
               style={{ width: "100%" }}
             />
           </Form.Item>
@@ -264,7 +417,7 @@ export default function Products() {
               </div>
               <div>
                 <span className="text-muted-foreground">Category:</span>
-                <p className="font-semibold">{selectedProduct.category}</p>
+                <p className="font-semibold">{selectedProduct.category?.name || "N/A"}</p>
               </div>
               <div>
                 <span className="text-muted-foreground">Unit:</span>
@@ -272,16 +425,19 @@ export default function Products() {
               </div>
               <div>
                 <span className="text-muted-foreground">Total Stock:</span>
-                <p className="font-semibold text-lg">{selectedProduct.totalStock}</p>
+                <p className="font-semibold text-lg">
+                  {selectedProduct.inventory?.reduce((sum, item) => sum + item.quantity, 0) || 0}
+                </p>
               </div>
             </div>
             <div className="mt-6">
               <h3 className="font-semibold mb-3">Stock by Location</h3>
               <Table
                 columns={locationColumns}
-                dataSource={selectedProduct.locations}
+                dataSource={selectedProduct.inventory}
                 pagination={false}
                 size="small"
+                rowKey={(record) => record.location?.name || Math.random()}
               />
             </div>
           </div>

@@ -1,89 +1,88 @@
 import { useState } from "react";
-import { Tabs, Table, Button, Modal, Form, Input, Space, Popconfirm, Tag, Switch } from "antd";
+import { Tabs, Table, Button, Modal, Form, Input, Space, Popconfirm, Tag, Switch, Select, message } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined, HomeOutlined } from "@ant-design/icons";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+const { Option } = Select;
 
 const Settings = () => {
-  const [activeTab, setActiveTab] = useState("warehouses");
+  const [activeTab, setActiveTab] = useState("locations");
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
-  const [editingWarehouse, setEditingWarehouse] = useState<any>(null);
+  const [editingLocation, setEditingLocation] = useState<any>(null);
+  const queryClient = useQueryClient();
 
-  // Mock data
-  const [warehouses, setWarehouses] = useState([
-    {
-      id: 1,
-      name: "Warehouse A",
-      code: "WH-A",
-      address: "123 Industrial Park, City Center",
-      manager: "John Doe",
-      capacity: "10000 sq ft",
-      status: "active",
-      isDefault: true,
+  // Fetch Locations
+  const { data: locations = [], isLoading } = useQuery({
+    queryKey: ["locations"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("locations")
+        .select("*")
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data;
     },
-    {
-      id: 2,
-      name: "Warehouse B",
-      code: "WH-B",
-      address: "456 Distribution Ave, North District",
-      manager: "Jane Smith",
-      capacity: "8000 sq ft",
-      status: "active",
-      isDefault: false,
-    },
-    {
-      id: 3,
-      name: "Warehouse C",
-      code: "WH-C",
-      address: "789 Storage Road, South Zone",
-      manager: "Mike Johnson",
-      capacity: "12000 sq ft",
-      status: "active",
-      isDefault: false,
-    },
-  ]);
+  });
 
-  const warehouseColumns = [
+  // Upsert Location Mutation
+  const upsertLocationMutation = useMutation({
+    mutationFn: async (values: any) => {
+      const { error } = await supabase
+        .from("locations")
+        .upsert({
+          id: editingLocation?.id,
+          name: values.name,
+          type: values.type,
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["locations"] });
+      message.success(editingLocation ? "Location updated" : "Location created");
+      setIsModalVisible(false);
+      form.resetFields();
+      setEditingLocation(null);
+    },
+    onError: (error) => {
+      message.error(`Error: ${error.message}`);
+    },
+  });
+
+  // Delete Location Mutation
+  const deleteLocationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("locations").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["locations"] });
+      message.success("Location deleted");
+    },
+    onError: (error) => {
+      message.error(`Error deleting location: ${error.message}`);
+    },
+  });
+
+  const locationColumns = [
     {
-      title: "Code",
-      dataIndex: "code",
-      key: "code",
-      render: (code: string, record: any) => (
+      title: "Location Name",
+      dataIndex: "name",
+      key: "name",
+      render: (text: string) => (
         <div className="flex items-center gap-2">
           <HomeOutlined />
-          <span className="font-medium">{code}</span>
-          {record.isDefault && <Tag color="blue">Default</Tag>}
+          <span className="font-medium">{text}</span>
         </div>
       ),
     },
     {
-      title: "Warehouse Name",
-      dataIndex: "name",
-      key: "name",
-    },
-    {
-      title: "Address",
-      dataIndex: "address",
-      key: "address",
-    },
-    {
-      title: "Manager",
-      dataIndex: "manager",
-      key: "manager",
-    },
-    {
-      title: "Capacity",
-      dataIndex: "capacity",
-      key: "capacity",
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      render: (status: string) => (
-        <Tag color={status === "active" ? "green" : "red"}>
-          {status.toUpperCase()}
-        </Tag>
-      ),
+      title: "Type",
+      dataIndex: "type",
+      key: "type",
+      render: (type: string) => <Tag color="blue">{type}</Tag>,
     },
     {
       title: "Actions",
@@ -98,18 +97,16 @@ const Settings = () => {
             Edit
           </Button>
           <Popconfirm
-            title="Delete Warehouse"
-            description="Are you sure you want to delete this warehouse?"
-            onConfirm={() => handleDelete(record.id)}
+            title="Delete Location"
+            description="Are you sure you want to delete this location?"
+            onConfirm={() => deleteLocationMutation.mutate(record.id)}
             okText="Yes"
             cancelText="No"
-            disabled={record.isDefault}
           >
             <Button
               type="link"
               danger
               icon={<DeleteOutlined />}
-              disabled={record.isDefault}
             >
               Delete
             </Button>
@@ -120,48 +117,27 @@ const Settings = () => {
   ];
 
   const handleAdd = () => {
-    setEditingWarehouse(null);
+    setEditingLocation(null);
     form.resetFields();
     setIsModalVisible(true);
   };
 
-  const handleEdit = (warehouse: any) => {
-    setEditingWarehouse(warehouse);
-    form.setFieldsValue(warehouse);
+  const handleEdit = (location: any) => {
+    setEditingLocation(location);
+    form.setFieldsValue(location);
     setIsModalVisible(true);
   };
 
-  const handleDelete = (id: number) => {
-    setWarehouses(warehouses.filter(wh => wh.id !== id));
-  };
-
-  const handleSubmit = async () => {
-    try {
-      const values = await form.validateFields();
-      if (editingWarehouse) {
-        setWarehouses(warehouses.map(wh =>
-          wh.id === editingWarehouse.id ? { ...wh, ...values } : wh
-        ));
-      } else {
-        const newWarehouse = {
-          id: warehouses.length + 1,
-          ...values,
-          status: "active",
-          isDefault: false,
-        };
-        setWarehouses([...warehouses, newWarehouse]);
-      }
-      setIsModalVisible(false);
-      form.resetFields();
-    } catch (error) {
-      console.error("Validation failed:", error);
-    }
+  const handleSubmit = () => {
+    form.validateFields().then((values) => {
+      upsertLocationMutation.mutate(values);
+    });
   };
 
   const items = [
     {
-      key: "warehouses",
-      label: "Warehouses & Locations",
+      key: "locations",
+      label: "Locations",
       children: (
         <div>
           <div className="flex justify-between items-center mb-4">
@@ -173,13 +149,14 @@ const Settings = () => {
               icon={<PlusOutlined />}
               onClick={handleAdd}
             >
-              Add Warehouse
+              Add Location
             </Button>
           </div>
           <Table
-            columns={warehouseColumns}
-            dataSource={warehouses}
+            columns={locationColumns}
+            dataSource={locations}
             rowKey="id"
+            loading={isLoading}
             pagination={{ pageSize: 10 }}
           />
         </div>
@@ -238,54 +215,36 @@ const Settings = () => {
       />
 
       <Modal
-        title={editingWarehouse ? "Edit Warehouse" : "Add New Warehouse"}
+        title={editingLocation ? "Edit Location" : "Add New Location"}
         open={isModalVisible}
         onOk={handleSubmit}
         onCancel={() => {
           setIsModalVisible(false);
           form.resetFields();
         }}
-        okText={editingWarehouse ? "Update" : "Create"}
+        okText={editingLocation ? "Update" : "Create"}
         width={600}
+        confirmLoading={upsertLocationMutation.isPending}
       >
         <Form form={form} layout="vertical">
           <Form.Item
-            name="code"
-            label="Warehouse Code"
-            rules={[{ required: true, message: "Please enter warehouse code" }]}
-          >
-            <Input placeholder="e.g., WH-A" />
-          </Form.Item>
-          <Form.Item
             name="name"
-            label="Warehouse Name"
-            rules={[{ required: true, message: "Please enter warehouse name" }]}
+            label="Location Name"
+            rules={[{ required: true, message: "Please enter location name" }]}
           >
-            <Input placeholder="Enter warehouse name" />
+            <Input placeholder="e.g., Main Warehouse" />
           </Form.Item>
           <Form.Item
-            name="address"
-            label="Address"
-            rules={[{ required: true, message: "Please enter address" }]}
+            name="type"
+            label="Type"
+            rules={[{ required: true, message: "Please select type" }]}
           >
-            <Input.TextArea
-              rows={2}
-              placeholder="Enter full address"
-            />
-          </Form.Item>
-          <Form.Item
-            name="manager"
-            label="Manager"
-            rules={[{ required: true, message: "Please enter manager name" }]}
-          >
-            <Input placeholder="Enter manager name" />
-          </Form.Item>
-          <Form.Item
-            name="capacity"
-            label="Capacity"
-            rules={[{ required: true, message: "Please enter capacity" }]}
-          >
-            <Input placeholder="e.g., 10000 sq ft" />
+            <Select placeholder="Select type">
+              <Option value="Warehouse">Warehouse</Option>
+              <Option value="Distribution Center">Distribution Center</Option>
+              <Option value="Store">Store</Option>
+              <Option value="Other">Other</Option>
+            </Select>
           </Form.Item>
         </Form>
       </Modal>

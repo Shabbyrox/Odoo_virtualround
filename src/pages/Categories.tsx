@@ -1,19 +1,69 @@
 import { useState } from "react";
-import { Table, Button, Modal, Form, Input, Space, Popconfirm, Tag } from "antd";
+import { Table, Button, Modal, Form, Input, Space, Popconfirm, Tag, message } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const Categories = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
   const [editingCategory, setEditingCategory] = useState<any>(null);
+  const queryClient = useQueryClient();
 
-  // Mock data
-  const [categories, setCategories] = useState([
-    { id: 1, name: "Electronics", description: "Electronic devices and components", productCount: 45, status: "active" },
-    { id: 2, name: "Furniture", description: "Office and home furniture", productCount: 23, status: "active" },
-    { id: 3, name: "Stationery", description: "Office supplies and stationery", productCount: 67, status: "active" },
-    { id: 4, name: "Food & Beverages", description: "Perishable and non-perishable items", productCount: 34, status: "active" },
-  ]);
+  // Fetch Categories
+  const { data: categories = [], isLoading } = useQuery({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("categories")
+        .select("*")
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Create/Update Mutation
+  const upsertCategoryMutation = useMutation({
+    mutationFn: async (values: any) => {
+      const { error } = await supabase
+        .from("categories")
+        .upsert({
+          id: editingCategory?.id,
+          name: values.name,
+          description: values.description,
+          status: "active",
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      message.success(editingCategory ? "Category updated" : "Category created");
+      setIsModalVisible(false);
+      form.resetFields();
+      setEditingCategory(null);
+    },
+    onError: (error) => {
+      message.error(`Error: ${error.message}`);
+    },
+  });
+
+  // Delete Mutation
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("categories").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      message.success("Category deleted");
+    },
+    onError: (error) => {
+      message.error(`Error deleting category: ${error.message}`);
+    },
+  });
 
   const columns = [
     {
@@ -25,12 +75,6 @@ const Categories = () => {
       title: "Description",
       dataIndex: "description",
       key: "description",
-    },
-    {
-      title: "Product Count",
-      dataIndex: "productCount",
-      key: "productCount",
-      align: "center" as const,
     },
     {
       title: "Status",
@@ -57,7 +101,7 @@ const Categories = () => {
           <Popconfirm
             title="Delete Category"
             description="Are you sure you want to delete this category?"
-            onConfirm={() => handleDelete(record.id)}
+            onConfirm={() => deleteCategoryMutation.mutate(record.id)}
             okText="Yes"
             cancelText="No"
           >
@@ -82,31 +126,10 @@ const Categories = () => {
     setIsModalVisible(true);
   };
 
-  const handleDelete = (id: number) => {
-    setCategories(categories.filter(cat => cat.id !== id));
-  };
-
-  const handleSubmit = async () => {
-    try {
-      const values = await form.validateFields();
-      if (editingCategory) {
-        setCategories(categories.map(cat => 
-          cat.id === editingCategory.id ? { ...cat, ...values } : cat
-        ));
-      } else {
-        const newCategory = {
-          id: categories.length + 1,
-          ...values,
-          productCount: 0,
-          status: "active",
-        };
-        setCategories([...categories, newCategory]);
-      }
-      setIsModalVisible(false);
-      form.resetFields();
-    } catch (error) {
-      console.error("Validation failed:", error);
-    }
+  const handleSubmit = () => {
+    form.validateFields().then((values) => {
+      upsertCategoryMutation.mutate(values);
+    });
   };
 
   return (
@@ -126,6 +149,7 @@ const Categories = () => {
         columns={columns}
         dataSource={categories}
         rowKey="id"
+        loading={isLoading}
         pagination={{ pageSize: 10 }}
       />
 
@@ -138,6 +162,7 @@ const Categories = () => {
           form.resetFields();
         }}
         okText={editingCategory ? "Update" : "Create"}
+        confirmLoading={upsertCategoryMutation.isPending}
       >
         <Form form={form} layout="vertical">
           <Form.Item

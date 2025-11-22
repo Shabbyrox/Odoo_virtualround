@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Layout, Menu, Input, Avatar, Dropdown } from "antd";
+import { useState, useEffect } from "react";
+import { Layout, Menu, Input, Avatar, Button, message } from "antd";
 import {
   DashboardOutlined,
   AppstoreOutlined,
@@ -20,6 +20,7 @@ import {
 } from "@ant-design/icons";
 import { useNavigate, useLocation } from "react-router-dom";
 import type { MenuProps } from "antd";
+import { supabase } from "@/integrations/supabase/client";
 
 const { Header, Sider, Content } = Layout;
 
@@ -31,24 +32,37 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  const userMenuItems: MenuProps["items"] = [
-    {
-      key: "profile",
-      icon: <UserOutlined />,
-      label: "My Profile",
-      onClick: () => navigate("/profile"),
-    },
-    {
-      type: "divider",
-    },
-    {
-      key: "logout",
-      icon: <LogoutOutlined />,
-      label: "Logout",
-      danger: true,
-    },
-  ];
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUserEmail(session.user.email || "User");
+      } else {
+        // Redirect to login if no session (basic protection)
+        navigate("/login");
+      }
+    };
+    getUser();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUserEmail(session.user.email || "User");
+      } else {
+        navigate("/login");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    message.success("Logged out successfully");
+    navigate("/login");
+  };
 
   const menuItems: MenuProps["items"] = [
     {
@@ -152,26 +166,49 @@ export default function AppLayout({ children }: AppLayoutProps) {
         collapsible
         collapsed={collapsed}
         onCollapse={setCollapsed}
-        className="!bg-sidebar !border-r !border-sidebar-border"
+        className="!bg-sidebar !border-r !border-sidebar-border flex flex-col h-screen sticky top-0"
         width={250}
         trigger={null}
+        theme="dark"
       >
-        <div className="h-16 flex items-center justify-center border-b border-sidebar-border">
-          <h1 className="text-sidebar-foreground font-bold text-xl">
+        <div className="h-16 flex items-center justify-center border-b border-gray-700">
+          <h1 className="text-white font-bold text-xl truncate px-4">
             {collapsed ? "SM" : "StockMaster"}
           </h1>
         </div>
-        <Menu
-          mode="inline"
-          selectedKeys={getSelectedKeys()}
-          defaultOpenKeys={getOpenKeys()}
-          items={menuItems}
-          className="!bg-sidebar !border-0 !text-sidebar-foreground mt-2"
-          theme="dark"
-        />
+
+        <div className="flex-1 overflow-y-auto py-4">
+          <Menu
+            mode="inline"
+            selectedKeys={getSelectedKeys()}
+            defaultOpenKeys={getOpenKeys()}
+            items={menuItems}
+            className="!bg-transparent !border-0"
+            theme="dark"
+          />
+        </div>
+
+        <div className="border-t border-gray-700 p-4">
+          <div className={`flex items-center gap-3 ${collapsed ? "justify-center" : ""}`}>
+            <Avatar icon={<UserOutlined />} className="bg-primary shrink-0" />
+            {!collapsed && (
+              <div className="flex-1 overflow-hidden">
+                <div className="text-sm font-medium text-white truncate" title={userEmail || "User"}>
+                  {userEmail || "User"}
+                </div>
+                <div
+                  className="text-xs text-gray-400 cursor-pointer hover:text-white flex items-center gap-1 mt-1"
+                  onClick={handleLogout}
+                >
+                  <LogoutOutlined /> Logout
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </Sider>
       <Layout>
-        <Header className="!bg-card !px-6 !h-16 flex items-center justify-between border-b border-border shadow-sm">
+        <Header className="!bg-white !px-6 !h-16 flex items-center justify-between border-b border-gray-200 shadow-sm">
           <div className="flex items-center gap-4 flex-1">
             {collapsed ? (
               <MenuUnfoldOutlined
@@ -186,17 +223,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
             )}
             <Input
               placeholder="Search SKU or Product..."
-              prefix={<SearchOutlined className="text-muted-foreground" />}
+              prefix={<SearchOutlined className="text-gray-400" />}
               className="max-w-md"
               size="middle"
             />
           </div>
-          <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-            <Avatar
-              icon={<UserOutlined />}
-              className="cursor-pointer bg-primary hover:bg-primary-hover transition-colors"
-            />
-          </Dropdown>
         </Header>
         <Content className="m-6">
           {children}
